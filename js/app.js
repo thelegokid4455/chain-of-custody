@@ -11,7 +11,6 @@
     'Darah': 'c-blue', 'Pakaian Korban': 'c-amber', 'Proyektil': 'c-purple', 'Senjata': 'c-red',
     'Sampel DNA': 'c-green', 'Dokumen': 'c-slate', 'Lainnya': 'c-slate'
   };
-  var KEY = 'coc_data_v1', SESSION = 'coc_session_v1';
 
   // ---------------------------------------------------------------- icons
   var ICONS = {
@@ -87,62 +86,26 @@
   function photoOf(item) { return item.photo || placeholder(item.type); }
 
   // ---------------------------------------------------------------- data
-  function seed() {
-    var t = Date.now();
-    return {
-      items: [
-        { code: 'BB-001', type: 'Darah', desc: 'Sampel darah dari korban, diambil dari luka tembak', location: 'Laboratorium Forensik', date: '2024-01-15', officer: 'Dr. Ahmad', photo: null, createdAt: t - 9e6 },
-        { code: 'BB-002', type: 'Pakaian Korban', desc: 'Kemeja korban dengan bercak darah dan robekan di bagian dada', location: 'Kejaksaan', date: '2024-01-16', officer: 'Inspektur Rudi', photo: null, createdAt: t - 8e6 },
-        { code: 'BB-003', type: 'Proyektil', desc: 'Proyektil kaliber 9mm yang diambil dari tubuh korban', location: 'Pengadilan', date: '2024-01-17', officer: 'Forensik Dr. Maya', photo: null, createdAt: t - 7e6 }
-      ],
-      transfers: [
-        { id: 1, code: 'BB-001', from: 'Rumah Sakit Umum', to: 'Penyidik Polisi', officer: 'Dr. Ahmad', date: '2024-01-15', time: '10:30', note: 'Pengambilan awal' },
-        { id: 2, code: 'BB-002', from: 'TKP', to: 'Penyidik Polisi', officer: 'Inspektur Rudi', date: '2024-01-16', time: '09:00', note: 'Pengambilan dari TKP' },
-        { id: 3, code: 'BB-001', from: 'Penyidik Polisi', to: 'Laboratorium Forensik', officer: 'Budi Santoso', date: '2024-01-16', time: '14:15', note: 'Untuk analisis DNA' },
-        { id: 4, code: 'BB-002', from: 'Penyidik Polisi', to: 'Laboratorium Forensik', officer: 'Siti Aminah', date: '2024-01-17', time: '11:45', note: 'Analisis serat dan DNA' },
-        { id: 5, code: 'BB-003', from: 'TKP', to: 'Penyidik Polisi', officer: 'Forensik Dr. Maya', date: '2024-01-17', time: '13:30', note: 'Pengambilan dari tubuh korban' },
-        { id: 6, code: 'BB-003', from: 'Penyidik Polisi', to: 'Laboratorium Forensik', officer: 'Teknisi Lab', date: '2024-01-18', time: '10:15', note: 'Analisis balistik' },
-        { id: 7, code: 'BB-002', from: 'Laboratorium Forensik', to: 'Kejaksaan', officer: 'Jaksa Agung', date: '2024-01-18', time: '16:20', note: 'Untuk keperluan persidangan' },
-        { id: 8, code: 'BB-003', from: 'Laboratorium Forensik', to: 'Kejaksaan', officer: 'Jaksa', date: '2024-01-19', time: '09:45', note: 'Laporan balistik' },
-        { id: 9, code: 'BB-003', from: 'Kejaksaan', to: 'Pengadilan', officer: 'Panitera', date: '2024-01-20', time: '14:00', note: 'Untuk sidang' }
-      ],
-      activity: [],
-      notifications: [
-        { id: 1, text: 'Barang bukti BB-001 telah dipindahkan ke Laboratorium Forensik', ts: t - 10 * 60e3, read: false },
-        { id: 2, text: '3 barang bukti baru ditambahkan hari ini', ts: t - 3600e3, read: false },
-        { id: 3, text: 'Sistem backup berjalan sukses', ts: t - 2 * 3600e3, read: true },
-        { id: 4, text: 'Update sistem v1.2 telah tersedia', ts: t - 86400e3, read: true }
-      ],
-      nextId: 10
-    };
-  }
-  var db;
-  function load() {
-    try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { db = null; }
-    if (!db || !db.items) { db = seed(); save(); }
-  }
-  function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(db)); return true; }
-    catch (e) { toast('Penyimpanan browser penuh. Coba foto yang lebih kecil.', 'bad'); return false; }
-  }
-  function session() { try { return JSON.parse(localStorage.getItem(SESSION)); } catch (e) { return null; } }
-  function item(code) { return db.items.filter(function (i) { return i.code === code; })[0]; }
+  var store = window.COCStore;
+  var state = { items: [], transfers: [], activity: [] };
+  function session() { return store && store.me(); }
+  function item(code) { return state.items.filter(function (i) { return i.code === code; })[0]; }
   function sortedTransfers() {
-    return db.transfers.slice().sort(function (a, b) { return (b.date + b.time).localeCompare(a.date + a.time) || b.id - a.id; });
-  }
-  function logActivity(text, kind) {
-    db.activity.unshift({ text: text, kind: kind, ts: Date.now(), by: session() ? session().name : '' });
-    db.activity = db.activity.slice(0, 30);
-  }
-  function notify(text) {
-    db.notifications.unshift({ id: Date.now(), text: text, ts: Date.now(), read: false });
-    db.notifications = db.notifications.slice(0, 30);
+    return state.transfers.slice().sort(function (a, b) { return (b.date + b.time).localeCompare(a.date + a.time) || b.id - a.id; });
   }
   function nextCode() {
     var max = 0;
-    db.items.forEach(function (i) { var m = /^BB-(\d+)$/.exec(i.code); if (m) max = Math.max(max, parseInt(m[1], 10)); });
+    state.items.forEach(function (i) { var m = /^BB-(\d+)$/.exec(i.code); if (m) max = Math.max(max, parseInt(m[1], 10)); });
     var n = String(max + 1); while (n.length < 3) n = '0' + n;
     return 'BB-' + n;
+  }
+  function seenKey() { var s = session(); return 'coc_seen_' + (s ? (s.id || s.name) : ''); }
+  function lastSeen() { return parseInt(localStorage.getItem(seenKey()) || '0', 10); }
+  function errMsg(e) { return store.friendly(e); }
+  function busy(btn, on, label) {
+    if (!btn) return;
+    if (on) { btn.dataset.label = btn.innerHTML; btn.disabled = true; btn.innerHTML = label || 'Menyimpan...'; }
+    else { btn.disabled = false; btn.innerHTML = btn.dataset.label || btn.innerHTML; }
   }
 
   // ---------------------------------------------------------------- ui utils
@@ -218,30 +181,64 @@
   }
 
   // ---------------------------------------------------------------- views
-  function viewLogin() {
+  function authCard(inner) {
     $('#app').innerHTML =
-      '<div class="login-wrap"><form class="login-card" id="login-form" novalidate>' +
+      '<div class="login-wrap"><div class="login-card">' +
       '<div class="login-logo">' + icon('shield') + '</div>' +
-      '<h1>DIGITAL CHAIN OF<br>CUSTODY</h1><p class="sub">Bukti Medikolegal Tracking System</p>' +
-      '<div class="field"><label>Username</label><input class="input" name="user" placeholder="Enter your username" autocomplete="username"></div>' +
-      '<div class="field"><label>Password</label><input class="input" type="password" name="pass" placeholder="Enter your password" autocomplete="current-password"></div>' +
-      '<div class="field"><label>User Role</label><select class="input" name="role">' + opts(ROLES, '', 'Select your role') + '</select></div>' +
+      '<h1>DIGITAL CHAIN OF<br>CUSTODY</h1><p class="sub">Bukti Medikolegal Tracking System</p>' + inner +
+      '<p class="note">' + (store.mode === 'local' ? 'Mode demo — data hanya tersimpan di browser ini' : 'Sistem Pelacakan Barang Bukti Medikolegal') +
+      '<br>Semua aktivitas dicatat untuk keamanan</p></div></div>';
+  }
+  function afterLogin() {
+    var target = sessionStorage.getItem('coc_after_login');
+    sessionStorage.removeItem('coc_after_login');
+    location.hash = target || '#/dashboard';
+    route();
+  }
+  function viewLogin() {
+    var remote = store.mode === 'supabase';
+    authCard('<form id="login-form" novalidate>' +
+      (remote
+        ? '<div class="field"><label>Email</label><input class="input" type="email" name="user" placeholder="nama@email.com" autocomplete="username"></div>'
+        : '<div class="field"><label>Username</label><input class="input" name="user" placeholder="Masukkan username" autocomplete="username"></div>') +
+      '<div class="field"><label>Password</label><input class="input" type="password" name="pass" placeholder="Masukkan password" autocomplete="current-password"></div>' +
+      (remote ? '' : '<div class="field"><label>User Role</label><select class="input" name="role">' + opts(ROLES, '', 'Pilih role') + '</select></div>') +
       '<div class="err" id="login-err" style="margin-bottom:10px"></div>' +
       '<button class="btn btn-primary btn-block" type="submit">' + icon('login') + 'Login to System</button>' +
-      '<p class="note">Prototype System for Medico-Legal Evidence Tracking<br>All activities are logged for security purposes</p>' +
-      '</form></div>';
+      (remote ? '<p class="center" style="margin-top:14px;font-size:13px">Belum punya akun? <a href="#/register">Daftar</a></p>' : '') +
+      '</form>');
     $('#login-form').onsubmit = function (e) {
       e.preventDefault();
-      var f = e.target, u = f.user.value.trim(), p = f.pass.value, r = f.role.value;
-      var err = !u ? 'Username wajib diisi' : !p ? 'Password wajib diisi' : !r ? 'Pilih role terlebih dahulu' : '';
+      var f = e.target, u = f.user.value.trim(), p = f.pass.value, r = remote ? '' : f.role.value;
+      var err = !u ? (remote ? 'Email wajib diisi' : 'Username wajib diisi') : !p ? 'Password wajib diisi' : (!remote && !r) ? 'Pilih role terlebih dahulu' : '';
       if (err) { $('#login-err').textContent = err; return; }
-      var s = { name: u, role: r, loginAt: Date.now() };
-      localStorage.setItem(SESSION, JSON.stringify(s));
-      logActivity(u + ' login sebagai ' + r, 'login'); save();
-      var target = sessionStorage.getItem('coc_after_login');
-      sessionStorage.removeItem('coc_after_login');
-      location.hash = target || '#/dashboard';
-      route();
+      var btn = $('button[type=submit]', f); busy(btn, true, 'Masuk...');
+      store.signIn(u, p, r).then(afterLogin).catch(function (x) { busy(btn, false); $('#login-err').textContent = errMsg(x); });
+    };
+  }
+  function viewRegister() {
+    if (store.mode !== 'supabase') { location.hash = '#/login'; return; }
+    authCard('<form id="reg-form" novalidate>' +
+      '<div class="field"><label>Nama Lengkap</label><input class="input" name="name" placeholder="Nama petugas" autocomplete="name"></div>' +
+      '<div class="field"><label>Email</label><input class="input" type="email" name="email" placeholder="nama@email.com" autocomplete="email"></div>' +
+      '<div class="field"><label>Password</label><input class="input" type="password" name="pass" placeholder="Minimal 6 karakter" autocomplete="new-password"></div>' +
+      '<div class="field"><label>Role</label><select class="input" name="role">' + opts(ROLES.slice(1), '', 'Pilih role') + '</select>' +
+      '<div class="hint">Akun Admin ditetapkan oleh pengelola sistem</div></div>' +
+      '<div class="err" id="reg-err" style="margin-bottom:10px"></div>' +
+      '<button class="btn btn-primary btn-block" type="submit">Daftar</button>' +
+      '<p class="center" style="margin-top:14px;font-size:13px">Sudah punya akun? <a href="#/login">Login</a></p></form>');
+    $('#reg-form').onsubmit = function (e) {
+      e.preventDefault();
+      var f = e.target, n = f.name.value.trim(), em = f.email.value.trim(), p = f.pass.value, r = f.role.value;
+      var err = !n ? 'Nama wajib diisi' : !/^\S+@\S+\.\S+$/.test(em) ? 'Email tidak valid' : p.length < 6 ? 'Password minimal 6 karakter' : !r ? 'Pilih role' : '';
+      if (err) { $('#reg-err').textContent = err; return; }
+      var btn = $('button[type=submit]', f); busy(btn, true, 'Mendaftar...');
+      store.signUp(n, em, p, r).then(function (res) {
+        if (res.needsConfirm) {
+          authCard('<div class="status-box" style="margin-bottom:14px">' + icon('check') + '<div>Pendaftaran berhasil. Kami telah mengirim email konfirmasi ke <b>' + esc(em) +
+            '</b>. Klik link di email tersebut, lalu login.</div></div><a class="btn btn-primary btn-block" href="#/login">Kembali ke Login</a>');
+        } else { toast('Akun berhasil dibuat', 'ok'); afterLogin(); }
+      }).catch(function (x) { busy(btn, false); $('#reg-err').textContent = errMsg(x); });
     };
   }
 
@@ -254,7 +251,8 @@
   ];
   function shell(active, title, body) {
     var s = session();
-    var unread = db.notifications.filter(function (n) { return !n.read; }).length;
+    var seen = lastSeen();
+    var unread = state.activity.filter(function (a) { return a.ts > seen; }).length;
     var role = s.role.replace(' (Rumah Sakit)', '');
     $('#app').innerHTML =
       '<div class="shell"><aside class="sidebar" id="sidebar">' +
@@ -263,7 +261,7 @@
       '<nav class="nav">' + NAV.map(function (n) {
         return '<a href="#/' + n[0] + '" class="' + (n[0] === active ? 'active' : '') + '">' + icon(n[1]) + '<span>' + n[2] + '</span></a>';
       }).join('') + '</nav>' +
-      '<div class="side-foot"><button class="btn btn-red btn-block" id="logout">' + icon('logout') + 'Logout</button></div></aside>' +
+      '<div class="side-foot">' + (store.mode === 'local' ? '<p style="font-size:11px;color:#94a3b8;margin-bottom:10px;text-align:center">Mode demo — data lokal</p>' : '') + '<button class="btn btn-red btn-block" id="logout">' + icon('logout') + 'Logout</button></div></aside>' +
       '<div class="backdrop" id="backdrop"></div>' +
       '<div class="main"><header class="topbar"><button class="menu-btn" id="menu">' + icon('menu') + '</button>' +
       '<div><h2>' + esc(title) + '</h2><div class="sub">Digital Chain of Custody System</div></div>' +
@@ -273,8 +271,7 @@
 
     $('#logout').onclick = function () {
       confirmDialog('Logout', 'Apakah Anda yakin ingin logout?', 'Logout', function () {
-        logActivity(s.name + ' logout', 'logout'); save();
-        localStorage.removeItem(SESSION); location.hash = '#/login'; route();
+        store.signOut().catch(function () {}).then(function () { location.hash = '#/login'; route(); });
       });
     };
     var sb = $('#sidebar'), bd = $('#backdrop');
@@ -285,12 +282,13 @@
   function toggleNotif() {
     var slot = $('#notif-slot');
     if (slot.innerHTML) { slot.innerHTML = ''; return; }
+    var seen = lastSeen(), list = state.activity.slice(0, 15);
     slot.innerHTML = '<div class="notif" id="notif"><h4>System Notifications <button id="mark-read">Tandai semua dibaca</button></h4><ul>' +
-      (db.notifications.length ? db.notifications.map(function (n) {
-        return '<li class="' + (n.read ? '' : 'unread') + '">' + esc(n.text) + '<small>' + ago(n.ts) + '</small></li>';
+      (list.length ? list.map(function (n) {
+        return '<li class="' + (n.ts > seen ? 'unread' : '') + '">' + esc(n.text) + '<small>' + (n.by ? esc(n.by) + ' · ' : '') + ago(n.ts) + '</small></li>';
       }).join('') : '<li>Tidak ada notifikasi</li>') + '</ul></div>';
     $('#mark-read').onclick = function () {
-      db.notifications.forEach(function (n) { n.read = true; }); save();
+      localStorage.setItem(seenKey(), String(Date.now()));
       var d = $('#bell .dot'); if (d) d.remove();
       $$('#notif li.unread').forEach(function (li) { li.classList.remove('unread'); });
     };
@@ -316,15 +314,15 @@
   }
 
   function viewDashboard() {
-    var inLab = db.items.filter(function (i) { return i.location === 'Laboratorium Forensik'; }).length;
-    var legal = db.items.filter(function (i) { return i.location === 'Kejaksaan' || i.location === 'Pengadilan'; }).length;
-    var recent = db.items.slice().sort(function (a, b) { return b.createdAt - a.createdAt; }).slice(0, 5);
-    var acts = db.activity.slice(0, 6);
+    var inLab = state.items.filter(function (i) { return i.location === 'Laboratorium Forensik'; }).length;
+    var legal = state.items.filter(function (i) { return i.location === 'Kejaksaan' || i.location === 'Pengadilan'; }).length;
+    var recent = state.items.slice().sort(function (a, b) { return b.createdAt - a.createdAt; }).slice(0, 5);
+    var acts = state.activity.slice(0, 6);
     var kindIcon = { add: ['plus', 'c-blue'], transfer: ['swap', 'c-green'], login: ['login', 'c-purple'], logout: ['logout', 'c-slate'], del: ['trash', 'c-red'] };
     function stat(label, n, ic, c) { return '<div class="stat"><div><small>' + label + '</small><div class="n">' + n + '</div></div><div class="ic ' + c + '">' + icon(ic) + '</div></div>'; }
     shell('dashboard', 'Dashboard',
-      '<div class="stats">' + stat('Total Barang Bukti', db.items.length, 'box', 'c-blue') +
-      stat('Perpindahan Tercatat', db.transfers.length, 'swap', 'c-green') +
+      '<div class="stats">' + stat('Total Barang Bukti', state.items.length, 'box', 'c-blue') +
+      stat('Perpindahan Tercatat', state.transfers.length, 'swap', 'c-green') +
       stat('Dalam Laboratorium', inLab, 'flask', 'c-purple') + stat('Dalam Proses Hukum', legal, 'gavel', 'c-red') + '</div>' +
       '<div class="card"><div class="card-head"><h3>Barang Bukti Terbaru</h3><a href="#/daftar">Lihat semua →</a></div>' + itemsTable(recent) + '</div>' +
       '<div class="two-col"><div class="card"><h3>Aktivitas Terakhir</h3>' +
@@ -377,13 +375,12 @@
       else if (!f.location.value) err = 'Pilih lokasi awal';
       else if (!f.officer.value.trim()) err = 'Petugas wajib diisi';
       if (err) { $('#add-err').textContent = err; return; }
-      db.items.push({ code: code, type: f.type.value, desc: f.desc.value.trim(), location: f.location.value, date: f.date.value,
-        officer: f.officer.value.trim(), photo: photo, createdAt: Date.now() });
-      logActivity(code + ' (' + f.type.value + ') ditambahkan', 'add');
-      notify('Barang bukti ' + code + ' ditambahkan oleh ' + session().name);
-      if (!save()) { db.items.pop(); return; }
-      toast('Barang bukti ' + code + ' berhasil disimpan', 'ok');
-      location.hash = '#/bukti/' + encodeURIComponent(code);
+      var btn = $('button[type=submit]', f); busy(btn, true);
+      store.addItem({ code: code, type: f.type.value, desc: f.desc.value.trim(), location: f.location.value, date: f.date.value,
+        officer: f.officer.value.trim() }, photo).then(function () {
+        toast('Barang bukti ' + code + ' berhasil disimpan', 'ok');
+        location.hash = '#/bukti/' + encodeURIComponent(code);
+      }).catch(function (x) { busy(btn, false); $('#add-err').textContent = errMsg(x); });
     };
   }
 
@@ -395,7 +392,7 @@
       '<select class="input" id="fl">' + opts(LOCATIONS, '', 'Semua Lokasi') + '</select></div></div><div id="tbl"></div></div>');
     function render() {
       var q = $('#q').value.toLowerCase(), t = $('#ft').value, l = $('#fl').value;
-      var list = db.items.filter(function (i) {
+      var list = state.items.filter(function (i) {
         return (!t || i.type === t) && (!l || i.location === l) &&
           (!q || (i.code + ' ' + i.desc + ' ' + i.officer).toLowerCase().indexOf(q) >= 0);
       }).sort(function (a, b) { return a.code.localeCompare(b.code); });
@@ -411,7 +408,7 @@
       shell('daftar', 'Detail Barang Bukti', '<div class="card empty">Barang bukti <b>' + esc(code) + '</b> tidak ditemukan.<br><br><a href="#/daftar">← Kembali ke daftar</a></div>');
       return;
     }
-    var hist = db.transfers.filter(function (t) { return t.code === code; })
+    var hist = state.transfers.filter(function (t) { return t.code === code; })
       .sort(function (a, b) { return (a.date + a.time).localeCompare(b.date + b.time) || a.id - b.id; });
     var isAdmin = session().role === 'Admin';
     shell('daftar', 'Detail Barang Bukti',
@@ -433,10 +430,9 @@
     $('#gen-qr').onclick = function () { showQR(it.code); };
     if (isAdmin) $('#del').onclick = function () {
       confirmDialog('Hapus Barang Bukti', 'Hapus ' + it.code + ' beserta seluruh riwayat perpindahannya? Tindakan ini tidak dapat dibatalkan.', 'Hapus', function () {
-        db.items = db.items.filter(function (i) { return i.code !== it.code; });
-        db.transfers = db.transfers.filter(function (t) { return t.code !== it.code; });
-        logActivity(it.code + ' dihapus', 'del'); save();
-        toast(it.code + ' dihapus', 'ok'); location.hash = '#/daftar';
+        store.deleteItem(it.code).then(function () {
+          toast(it.code + ' dihapus', 'ok'); location.hash = '#/daftar';
+        }).catch(function (x) { toast(errMsg(x), 'bad'); });
       });
     };
   }
@@ -458,7 +454,7 @@
     shell('perpindahan', 'Perpindahan Barang Bukti',
       '<div class="card" style="max-width:820px"><h3>Catat Perpindahan Barang Bukti</h3><form id="f-tr" novalidate>' +
       '<div class="field"><label>Kode Bukti <span class="req">*</span></label><select class="input" name="code"><option value="">Pilih Kode Bukti</option>' +
-      db.items.slice().sort(function (a, b) { return a.code.localeCompare(b.code); }).map(function (i) {
+      state.items.slice().sort(function (a, b) { return a.code.localeCompare(b.code); }).map(function (i) {
         return '<option value="' + esc(i.code) + '"' + (i.code === pre ? ' selected' : '') + '>' + esc(i.code + ' - ' + i.type + ' (' + i.location + ')') + '</option>';
       }).join('') + '</select></div>' +
       '<div class="grid-2"><div class="field"><label>Lokasi Asal <span class="req">*</span></label><select class="input" name="from">' + opts(LOCATIONS, '', 'Pilih Lokasi Asal') + '</select><div class="hint">Otomatis terisi dari lokasi terakhir</div></div>' +
@@ -469,7 +465,7 @@
       '<div class="field"><label>Keterangan</label><textarea class="input" name="note" placeholder="Alasan perpindahan atau informasi tambahan..."></textarea></div>' +
       '<div class="err" id="tr-err"></div>' +
       '<div class="form-actions"><a class="btn btn-ghost" href="#/dashboard">Batal</a><button class="btn btn-primary" type="submit">' + icon('swap') + 'Catat Perpindahan</button></div>' +
-      '</form></div><div class="card"><h3>Barang Bukti yang Tersedia</h3>' + itemsTable(db.items.slice().sort(function (a, b) { return a.code.localeCompare(b.code); })) + '</div>');
+      '</form></div><div class="card"><h3>Barang Bukti yang Tersedia</h3>' + itemsTable(state.items.slice().sort(function (a, b) { return a.code.localeCompare(b.code); })) + '</div>');
     bindQR();
     var f = $('#f-tr');
     function syncFrom() { var it = item(f.code.value); if (it) f.from.value = it.location; }
@@ -480,15 +476,12 @@
         f.from.value === f.to.value ? 'Lokasi asal dan tujuan tidak boleh sama' : !f.officer.value.trim() ? 'Petugas wajib diisi' :
         !f.date.value || !f.time.value ? 'Tanggal dan waktu wajib diisi' : '';
       if (err) { $('#tr-err').textContent = err; return; }
-      var it = item(f.code.value);
-      db.transfers.push({ id: db.nextId++, code: it.code, from: f.from.value, to: f.to.value, officer: f.officer.value.trim(),
-        date: f.date.value, time: f.time.value, note: f.note.value.trim() });
-      it.location = f.to.value;
-      logActivity(it.code + ' dipindahkan ke ' + f.to.value, 'transfer');
-      notify('Barang bukti ' + it.code + ' telah dipindahkan ke ' + f.to.value);
-      save();
-      toast('Perpindahan ' + it.code + ' berhasil dicatat', 'ok');
-      location.hash = '#/log';
+      var code = f.code.value, btn = $('button[type=submit]', f); busy(btn, true);
+      store.addTransfer({ code: code, from: f.from.value, to: f.to.value, officer: f.officer.value.trim(),
+        date: f.date.value, time: f.time.value, note: f.note.value.trim() }).then(function () {
+        toast('Perpindahan ' + code + ' berhasil dicatat', 'ok');
+        location.hash = '#/log';
+      }).catch(function (x) { busy(btn, false); $('#tr-err').textContent = errMsg(x); });
     };
   }
 
@@ -496,9 +489,9 @@
     var list = sortedTransfers();
     shell('log', 'Log Chain of Custody',
       '<div class="card"><div class="card-head"><h3>Log Chain of Custody</h3><div class="toolbar">' +
-      '<select class="input" id="fc"><option value="">Semua Barang Bukti</option>' + db.items.map(function (i) { return '<option>' + esc(i.code) + '</option>'; }).join('') + '</select>' +
+      '<select class="input" id="fc"><option value="">Semua Barang Bukti</option>' + state.items.map(function (i) { return '<option>' + esc(i.code) + '</option>'; }).join('') + '</select>' +
       '<button class="btn btn-ghost btn-sm" id="csv">' + icon('download') + 'Export CSV</button></div></div>' +
-      '<div class="legend"><span>Total Perpindahan: ' + list.length + '</span><span class="g">Barang Bukti: ' + db.items.length + '</span></div>' +
+      '<div class="legend"><span>Total Perpindahan: ' + list.length + '</span><span class="g">Barang Bukti: ' + state.items.length + '</span></div>' +
       '<div id="tbl"></div></div>');
     function render() {
       var c = $('#fc').value;
@@ -517,6 +510,11 @@
   }
 
   // ---------------------------------------------------------------- router
+  var routeSeq = 0;
+  function loadingScreen(msg) {
+    $('#app').innerHTML = '<div class="login-wrap"><div class="login-card center"><div class="login-logo">' + icon('shield') +
+      '</div><p style="color:var(--muted)">' + esc(msg || 'Memuat data...') + '</p></div></div>';
+  }
   function route() {
     closeModal();
     var h = location.hash.replace(/^#\/?/, ''), q = {}, path = h, qi = h.indexOf('?');
@@ -526,21 +524,43 @@
     }
     var parts = path.split('/');
     if (!session()) {
-      if (parts[0] && parts[0] !== 'login') sessionStorage.setItem('coc_after_login', '#/' + h);
+      if (parts[0] === 'register') return viewRegister();
+      if (parts[0] && parts[0] !== 'login' && parts[0].indexOf('access_token') !== 0) sessionStorage.setItem('coc_after_login', '#/' + h);
       if (location.hash !== '#/login') history.replaceState(null, '', '#/login');
       return viewLogin();
     }
-    switch (parts[0]) {
-      case 'tambah': return viewTambah();
-      case 'daftar': return viewDaftar();
-      case 'bukti': return viewDetail(decodeURIComponent(parts[1] || ''));
-      case 'perpindahan': return viewPerpindahan(q);
-      case 'log': return viewLog();
-      case 'dashboard': return viewDashboard();
-      default: history.replaceState(null, '', '#/dashboard'); return viewDashboard();
-    }
+    if (parts[0] === 'login' || parts[0] === 'register') { history.replaceState(null, '', '#/dashboard'); parts = ['dashboard']; }
+    var seq = ++routeSeq;
+    if (!$('.shell')) loadingScreen();
+    else { var c = $('.content'); if (c) c.style.opacity = '.55'; }
+    store.load().then(function (data) {
+      if (seq !== routeSeq) return;
+      state = data;
+      switch (parts[0]) {
+        case 'tambah': return viewTambah();
+        case 'daftar': return viewDaftar();
+        case 'bukti': return viewDetail(decodeURIComponent(parts[1] || ''));
+        case 'perpindahan': return viewPerpindahan(q);
+        case 'log': return viewLog();
+        case 'dashboard': return viewDashboard();
+        default: history.replaceState(null, '', '#/dashboard'); return viewDashboard();
+      }
+    }).catch(function (x) {
+      if (seq !== routeSeq) return;
+      $('#app').innerHTML = '<div class="login-wrap"><div class="login-card center"><div class="login-logo" style="background:var(--red)">' + icon('x') +
+        '</div><p style="margin-bottom:16px">Gagal memuat data.<br><small style="color:var(--muted)">' + esc(errMsg(x)) + '</small></p>' +
+        '<button class="btn btn-primary btn-block" id="retry">Coba lagi</button>' +
+        '<button class="btn btn-ghost btn-block" id="relogin" style="margin-top:8px">Login ulang</button></div></div>';
+      $('#retry').onclick = route;
+      $('#relogin').onclick = function () { store.signOut().catch(function () {}).then(function () { location.hash = '#/login'; route(); }); };
+    });
+  }
+
+  if (!store) {
+    document.getElementById('app').innerHTML = '<div style="padding:40px;text-align:center">Gagal memuat library database. Periksa koneksi internet lalu muat ulang halaman.</div>';
+    return;
   }
   window.addEventListener('hashchange', route);
-  load();
-  route();
+  loadingScreen('Menghubungkan...');
+  store.init().catch(function () { return null; }).then(route);
 })();
