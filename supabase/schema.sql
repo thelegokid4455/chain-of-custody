@@ -149,6 +149,14 @@ drop policy if exists "users log login/logout" on public.activity;
 create policy "users log login/logout" on public.activity
   for insert to authenticated with check (kind in ('login', 'logout'));
 
+-- ---------- API permissions (RLS above decides which rows) ----------
+grant usage on schema public to anon, authenticated;
+grant select on public.profiles to authenticated;
+grant select, insert, delete on public.items to authenticated;
+grant select, insert on public.transfers to authenticated;
+grant select, insert on public.activity to authenticated;
+grant execute on function public.is_admin(), public.my_name() to authenticated;
+
 -- ---------- Photo storage (private bucket) ----------
 insert into storage.buckets (id, name, public)
 values ('evidence-photos', 'evidence-photos', false)
@@ -161,6 +169,76 @@ drop policy if exists "users upload evidence photos" on storage.objects;
 create policy "users upload evidence photos" on storage.objects
   for insert to authenticated with check (bucket_id = 'evidence-photos');
 
+-- ---------- Admin approval for new accounts ----------
+
+alter table public.profiles add column if not exists approved boolean not null default false;
+alter table public.profiles add column if not exists email text;
+update public.profiles p set email = u.email from auth.users u where u.id = p.id and p.email is null;
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare r text := new.raw_user_meta_data->>'role';
+begin
+  if r is null or r not in ('Dokter Forensik (Rumah Sakit)','Penyidik Polisi',
+                            'Petugas Laboratorium','Kejaksaan','Pengadilan') then
+    r := 'Penyidik Polisi';
+  end if;
+  insert into public.profiles (id, name, role, email, approved)
+  values (new.id,
+          coalesce(nullif(trim(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1)),
+          r, new.email, false);
+  return new;
+end $$;
+
+create or replace function public.is_approved()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and approved);
+$$;
+
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'Admin' and approved);
+$$;
+
+-- profiles: see your own row always; approved users see everyone; admins approve / set roles
+drop policy if exists "profiles readable by users" on public.profiles;
+create policy "profiles readable by users" on public.profiles
+  for select to authenticated using (id = auth.uid() or public.is_approved());
+drop policy if exists "admins manage profiles" on public.profiles;
+create policy "admins manage profiles" on public.profiles
+  for update to authenticated using (public.is_admin()) with check (public.is_admin());
+grant update (approved, role) on public.profiles to authenticated;
+
+drop policy if exists "items readable by users" on public.items;
+create policy "items readable by users" on public.items
+  for select to authenticated using (public.is_approved());
+drop policy if exists "users add items" on public.items;
+create policy "users add items" on public.items
+  for insert to authenticated with check (public.is_approved() and created_by = auth.uid());
+
+drop policy if exists "transfers readable by users" on public.transfers;
+create policy "transfers readable by users" on public.transfers
+  for select to authenticated using (public.is_approved());
+drop policy if exists "users add transfers" on public.transfers;
+create policy "users add transfers" on public.transfers
+  for insert to authenticated with check (public.is_approved() and created_by = auth.uid());
+
+drop policy if exists "activity readable by users" on public.activity;
+create policy "activity readable by users" on public.activity
+  for select to authenticated using (public.is_approved());
+drop policy if exists "users log login/logout" on public.activity;
+create policy "users log login/logout" on public.activity
+  for insert to authenticated with check (public.is_approved() and kind in ('login', 'logout'));
+
+drop policy if exists "users read evidence photos" on storage.objects;
+create policy "users read evidence photos" on storage.objects
+  for select to authenticated using (bucket_id = 'evidence-photos' and public.is_approved());
+drop policy if exists "users upload evidence photos" on storage.objects;
+create policy "users upload evidence photos" on storage.objects
+  for insert to authenticated with check (bucket_id = 'evidence-photos' and public.is_approved());
+
+grant execute on function public.is_approved() to authenticated;
+
 -- ---------- Make yourself Admin (run AFTER registering on the site) ----------
--- update public.profiles set role = 'Admin'
--- where id = (select id from auth.users where email = 'YOUR_EMAIL_HERE');
+-- update public.profiles set role = 'Admin', approved = true
+-- where email = 'YOUR_EMAIL_HERE';

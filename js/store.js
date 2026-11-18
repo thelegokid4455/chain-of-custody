@@ -29,9 +29,9 @@
     function check(res) { if (res.error) throw res.error; return res.data; }
 
     function loadProfile(user) {
-      return sb.from('profiles').select('name, role').eq('id', user.id).single().then(function (res) {
+      return sb.from('profiles').select('name, role, approved').eq('id', user.id).single().then(function (res) {
         var p = check(res);
-        me = { id: user.id, email: user.email, name: p.name, role: p.role,
+        me = { id: user.id, email: user.email, name: p.name, role: p.role, approved: !!p.approved,
           loginAt: user.last_sign_in_at ? Date.parse(user.last_sign_in_at) : Date.now() };
         return me;
       });
@@ -52,6 +52,7 @@
         return sb.auth.signInWithPassword({ email: email, password: password })
           .then(function (res) { var d = check(res); return loadProfile(d.user); })
           .then(function (u) {
+            if (!u.approved) return u;
             return sb.from('activity').insert({ message: u.name + ' login sebagai ' + u.role, kind: 'login', by_name: u.name })
               .then(function () { return u; });
           });
@@ -67,7 +68,7 @@
       },
       signOut: function () {
         var u = me;
-        var log = u ? sb.from('activity').insert({ message: u.name + ' logout', kind: 'logout', by_name: u.name }) : Promise.resolve();
+        var log = u && u.approved ? sb.from('activity').insert({ message: u.name + ' logout', kind: 'logout', by_name: u.name }) : Promise.resolve();
         return log.then(function () { return sb.auth.signOut(); }).then(function () { me = null; });
       },
       load: function () {
@@ -114,6 +115,19 @@
       addTransfer: function (t) {
         return sb.from('transfers').insert({ code: t.code, from_loc: t.from, to_loc: t.to, officer: t.officer,
           moved_date: t.date, moved_time: t.time, note: t.note || null, created_by: me.id }).then(check);
+      },
+      refreshMe: function () {
+        return sb.auth.getUser().then(function (res) { var d = check(res); return loadProfile(d.user); });
+      },
+      listUsers: function () {
+        return sb.from('profiles').select('id, name, email, role, approved, created_at').order('created_at', { ascending: false })
+          .then(function (res) { return check(res); });
+      },
+      updateUser: function (id, changes) {
+        return sb.from('profiles').update(changes).eq('id', id).select().then(function (res) {
+          var d = check(res);
+          if (!d || !d.length) throw new Error('row-level security');
+        });
       },
       deleteItem: function (code) {
         return sb.from('items').delete().eq('code', code).select().then(function (res) {
@@ -173,9 +187,10 @@
       mode: 'local',
       friendly: friendly,
       me: me,
-      init: function () { return Promise.resolve(me()); },
+      init: function () { var u = me(); if (u) u.approved = true; return Promise.resolve(u); },
+      refreshMe: function () { return Promise.resolve(me()); },
       signIn: function (name, password, role) {
-        var u = { id: 'local', name: name, role: role, loginAt: Date.now() };
+        var u = { id: 'local', name: name, role: role, approved: true, loginAt: Date.now() };
         localStorage.setItem(SESSION, JSON.stringify(u));
         log(name + ' login sebagai ' + role, 'login'); persist();
         return Promise.resolve(u);

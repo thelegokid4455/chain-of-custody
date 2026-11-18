@@ -37,7 +37,9 @@
     search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
     file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6"/>',
     check: '<path d="M20 6L9 17l-5-5"/>',
-    trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>'
+    trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
+    user: '<circle cx="9" cy="8" r="4"/><path d="M1 21v-1a7 7 0 0 1 14 0v1"/><path d="M17 11l2 2 4-4"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
   };
   function icon(n, cls) { return '<svg class="i ' + (cls || '') + '" viewBox="0 0 24 24">' + ICONS[n] + '</svg>'; }
 
@@ -236,7 +238,7 @@
       store.signUp(n, em, p, r).then(function (res) {
         if (res.needsConfirm) {
           authCard('<div class="status-box" style="margin-bottom:14px">' + icon('check') + '<div>Pendaftaran berhasil. Kami telah mengirim email konfirmasi ke <b>' + esc(em) +
-            '</b>. Klik link di email tersebut, lalu login.</div></div><a class="btn btn-primary btn-block" href="#/login">Kembali ke Login</a>');
+            '</b>. Klik link di email tersebut, lalu login. Setelah itu Admin perlu menyetujui akun Anda.</div></div><a class="btn btn-primary btn-block" href="#/login">Kembali ke Login</a>');
         } else { toast('Akun berhasil dibuat', 'ok'); afterLogin(); }
       }).catch(function (x) { busy(btn, false); $('#reg-err').textContent = errMsg(x); });
     };
@@ -258,7 +260,7 @@
       '<div class="shell"><aside class="sidebar" id="sidebar">' +
       '<div class="brand"><div class="logo">' + icon('shield') + '</div><div><b>CHAIN OF<br>CUSTODY</b><small>Medikolegal System</small></div></div>' +
       '<div class="user"><div class="avatar">' + esc(s.name.charAt(0).toUpperCase()) + '</div><div><b>' + esc(s.name) + '</b><small>' + esc(role) + '</small></div></div>' +
-      '<nav class="nav">' + NAV.map(function (n) {
+      '<nav class="nav">' + NAV.concat(s.role === 'Admin' && store.mode === 'supabase' ? [['pengguna', 'user', 'Kelola Pengguna']] : []).map(function (n) {
         return '<a href="#/' + n[0] + '" class="' + (n[0] === active ? 'active' : '') + '">' + icon(n[1]) + '<span>' + n[2] + '</span></a>';
       }).join('') + '</nav>' +
       '<div class="side-foot">' + (store.mode === 'local' ? '<p style="font-size:11px;color:#94a3b8;margin-bottom:10px;text-align:center">Mode demo — data lokal</p>' : '') + '<button class="btn btn-red btn-block" id="logout">' + icon('logout') + 'Logout</button></div></aside>' +
@@ -510,6 +512,59 @@
   }
 
   // ---------------------------------------------------------------- router
+  function viewPending() {
+    var s = session();
+    authCard('<div class="status-box" style="margin-bottom:14px;background:var(--amber-soft);border-color:#fcd34d">' + icon('clock') +
+      '<div><b>Akun menunggu persetujuan</b><br><small>Halo ' + esc(s.name) + ', akun Anda (' + esc(s.role) +
+      ') sudah terdaftar tetapi belum disetujui oleh Admin. Hubungi Admin sistem, lalu klik "Periksa lagi".</small></div></div>' +
+      '<button class="btn btn-primary btn-block" id="recheck">Periksa lagi</button>' +
+      '<button class="btn btn-ghost btn-block" id="pend-out" style="margin-top:8px">Logout</button>');
+    $('#recheck').onclick = function () {
+      var b = this; busy(b, true, 'Memeriksa...');
+      store.refreshMe().then(function (u) { if (u && u.approved) { toast('Akun telah disetujui', 'ok'); afterLogin(); } else { busy(b, false); toast('Belum disetujui'); } })
+        .catch(function (x) { busy(b, false); toast(errMsg(x), 'bad'); });
+    };
+    $('#pend-out').onclick = function () { store.signOut().catch(function () {}).then(function () { location.hash = '#/login'; route(); }); };
+  }
+
+  function viewUsers() {
+    var s = session();
+    if (s.role !== 'Admin' || store.mode !== 'supabase') { location.hash = '#/dashboard'; return; }
+    shell('pengguna', 'Kelola Pengguna', '<div class="card"><div class="card-head"><h3>Pengguna Sistem</h3></div><div id="users">Memuat...</div></div>');
+    function render() {
+      store.listUsers().then(function (list) {
+        var pending = list.filter(function (u) { return !u.approved; }).length;
+        $('#users').innerHTML = (pending ? '<p class="legend"><span style="color:var(--amber)">' + pending + ' akun menunggu persetujuan</span></p>' : '') +
+          '<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Email</th><th>Role</th><th>Status</th><th>Aksi</th></tr></thead><tbody>' +
+          list.map(function (u) {
+            var self = u.id === s.id;
+            return '<tr><td><b>' + esc(u.name) + '</b>' + (self ? ' <small style="color:var(--muted)">(Anda)</small>' : '') + '</td><td>' + esc(u.email || '-') + '</td>' +
+              '<td>' + (self ? esc(u.role) : '<select class="input" style="min-width:170px;padding:6px 8px" data-role="' + esc(u.id) + '">' + opts(ROLES, u.role) + '</select>') + '</td>' +
+              '<td>' + (u.approved ? '<span class="badge c-green">Disetujui</span>' : '<span class="badge c-amber">Menunggu</span>') + '</td>' +
+              '<td>' + (self ? '' : u.approved
+                ? '<button class="btn btn-ghost btn-sm" data-approve="' + esc(u.id) + '" data-v="0">Cabut akses</button>'
+                : '<button class="btn btn-green btn-sm" data-approve="' + esc(u.id) + '" data-v="1">Setujui</button>') + '</td></tr>';
+          }).join('') + '</tbody></table></div>';
+        $$('[data-approve]').forEach(function (b) {
+          b.onclick = function () {
+            busy(b, true, '...');
+            store.updateUser(b.dataset.approve, { approved: b.dataset.v === '1' })
+              .then(function () { toast(b.dataset.v === '1' ? 'Akun disetujui' : 'Akses dicabut', 'ok'); render(); })
+              .catch(function (x) { busy(b, false); toast(errMsg(x), 'bad'); });
+          };
+        });
+        $$('[data-role]').forEach(function (sel) {
+          sel.onchange = function () {
+            store.updateUser(sel.dataset.role, { role: sel.value })
+              .then(function () { toast('Role diperbarui', 'ok'); })
+              .catch(function (x) { toast(errMsg(x), 'bad'); render(); });
+          };
+        });
+      }).catch(function (x) { $('#users').textContent = errMsg(x); });
+    }
+    render();
+  }
+
   var routeSeq = 0;
   function loadingScreen(msg) {
     $('#app').innerHTML = '<div class="login-wrap"><div class="login-card center"><div class="login-logo">' + icon('shield') +
@@ -529,6 +584,10 @@
       if (location.hash !== '#/login') history.replaceState(null, '', '#/login');
       return viewLogin();
     }
+    if (!session().approved) {
+      if (parts[0] && ['login', 'register'].indexOf(parts[0]) < 0) sessionStorage.setItem('coc_after_login', '#/' + h);
+      return viewPending();
+    }
     if (parts[0] === 'login' || parts[0] === 'register') { history.replaceState(null, '', '#/dashboard'); parts = ['dashboard']; }
     var seq = ++routeSeq;
     if (!$('.shell')) loadingScreen();
@@ -542,6 +601,7 @@
         case 'bukti': return viewDetail(decodeURIComponent(parts[1] || ''));
         case 'perpindahan': return viewPerpindahan(q);
         case 'log': return viewLog();
+        case 'pengguna': return viewUsers();
         case 'dashboard': return viewDashboard();
         default: history.replaceState(null, '', '#/dashboard'); return viewDashboard();
       }

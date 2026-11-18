@@ -20,10 +20,11 @@ The site is static (GitHub Pages); data lives in Supabase.
 2. SQL Editor → run `supabase/schema.sql` (and `supabase/seed.sql` for demo data, optional).
 3. Project Settings → API → copy the Project URL and the anon/publishable key into `js/config.js`.
 4. Authentication → URL Configuration → set Site URL to the live site URL.
-5. Register on the site, then make yourself Admin with the UPDATE at the bottom of `schema.sql`.
+5. Register on the site, confirm your email, then make yourself Admin with the UPDATE at the bottom of `schema.sql`.
+6. New accounts wait for Admin approval (menu: Kelola Pengguna).
 
 Security rules (enforced in the database):
-- Only logged-in users can read anything; photos are in a private bucket.
+- New accounts must be approved by an Admin before they can see or record anything; photos are in a private bucket.
 - A location changes only through a recorded transfer.
 - The custody log is append-only — no edits or deletes.
 - Only Admins can delete evidence; nobody can self-register as Admin.
